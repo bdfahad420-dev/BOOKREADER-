@@ -28,6 +28,14 @@ jobs:
 
       - run: flutter pub get
 
+      - name: Patch syncfusion compileSdk
+        run: |
+          for f in $(find "$HOME/.pub-cache/hosted" -path "*syncfusion_flutter_pdfviewer-*/android/build.gradle*"); do
+            echo "Patching $f"
+            sed -i -E 's/compileSdkVersion[ =(]+[0-9]+\)?/compileSdkVersion 36/; s/compileSdk[ =(]+[0-9]+\)?/compileSdk 36/' "$f"
+            grep -n "compileSdk" "$f"
+          done
+
       - run: flutter build apk --release
 
       - uses: actions/upload-artifact@v4
