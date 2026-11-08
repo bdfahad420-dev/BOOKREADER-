@@ -32,11 +32,16 @@ jobs:
         run: |
           find "$HOME/.pub-cache/hosted" -path "*/android/build.gradle*" -not -path "*/example/*" | while read -r f; do
             sed -i -E 's/(compileSdk(Version)?[ =(]+)[0-9]+/\136/' "$f"
-            echo "Patched: $f"
-            grep -n "compileSdk" "$f" || true
           done
 
-      - run: flutter build apk --release
+      - name: Build APK (3 attempts)
+        run: |
+          for i in 1 2 3; do
+            flutter build apk --release && exit 0
+            echo "Build failed, retrying ($i)..."
+            sleep 30
+          done
+          exit 1
 
       - uses: actions/upload-artifact@v4
         with:
