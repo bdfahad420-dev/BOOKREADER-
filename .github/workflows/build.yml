@@ -28,12 +28,13 @@ jobs:
 
       - run: flutter pub get
 
-      - name: Patch syncfusion compileSdk
+      - name: Patch compileSdk of all plugins to 36
         run: |
-          f=$(find "$HOME/.pub-cache/hosted" -path "*/syncfusion_flutter_pdfviewer-*/android/build.gradle" -not -path "*/example/*" | head -n 1)
-          echo "Patching $f"
-          sed -i -E 's/compileSdkVersion[ =(]+[0-9]+\)?/compileSdkVersion 36/; s/compileSdk[ =(]+[0-9]+\)?/compileSdk 36/' "$f"
-          grep -n "compileSdk" "$f" || true
+          find "$HOME/.pub-cache/hosted" -path "*/android/build.gradle*" -not -path "*/example/*" | while read -r f; do
+            sed -i -E 's/(compileSdk(Version)?[ =(]+)[0-9]+/\136/' "$f"
+            echo "Patched: $f"
+            grep -n "compileSdk" "$f" || true
+          done
 
       - run: flutter build apk --release
 
