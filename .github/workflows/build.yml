@@ -7,18 +7,29 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: 17
 
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
 
       - name: Generate Android project
         run: flutter create --project-name pdf_reader_pro --org com.pdfreaderpro --platforms android .
@@ -26,24 +37,40 @@ jobs:
       - name: Set app name
         run: sed -i 's/android:label="[^"]*"/android:label="PDF Reader Pro"/' android/app/src/main/AndroidManifest.xml
 
-      - run: flutter pub get
+      - name: Gradle network timeouts and memory
+        run: |
+          mkdir -p "$HOME/.gradle"
+          cat >> "$HOME/.gradle/gradle.properties" <<'EOF'
+          systemProp.org.gradle.internal.http.connectionTimeout=180000
+          systemProp.org.gradle.internal.http.socketTimeout=180000
+          org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g
+          EOF
+
+      - name: Run flutter pub get
+        run: flutter pub get
 
       - name: Patch compileSdk of all plugins to 36
         run: |
-          find "$HOME/.pub-cache/hosted" -path "*/android/build.gradle*" -not -path "*/example/*" | while read -r f; do
+          find "$HOME/.pub-cache/hosted" -path "*/android/build.gradle*" \
+            -not -path "*/example/*" -not -path "*/android_test_runner/*" | while read -r f; do
             sed -i -E 's/(compileSdk(Version)?[ =(]+)[0-9]+/\136/' "$f"
+            echo "Patched: $f"
           done
 
-      - name: Build APK (3 attempts)
+      - name: Run flutter build apk --release
         run: |
           for i in 1 2 3; do
-            flutter build apk --release && exit 0
-            echo "Build failed, retrying ($i)..."
+            echo "Build attempt $i"
+            if flutter build apk --release; then
+              exit 0
+            fi
+            echo "Build failed, waiting before retry..."
             sleep 30
           done
           exit 1
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
-          name: pdf-reader-apk
+          name: pdf-reader-pro-apk
           path: build/app/outputs/flutter-apk/app-release.apk
